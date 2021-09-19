@@ -13,7 +13,8 @@ Panel::Panel(const Point& start, const Point& end) :
     m_angleFromHorizontal = std::atan2(end.y-start.y, end.x-start.x);
     m_angleFromHorizontal = std::fmod(std::fmod(m_angleFromHorizontal, M_PI * 2.0) + M_PI*2.0, M_PI*2.0);
     m_delta = m_angleFromHorizontal - M_PI / 2.0;
-    m_control = Point(m_length/2.0*std::cos(m_angleFromHorizontal), m_length/2.0*std::sin(m_angleFromHorizontal));
+    m_control = Point(m_start.x + m_length/2.0*std::cos(m_angleFromHorizontal), 
+                      m_start.y + m_length/2.0*std::sin(m_angleFromHorizontal));
 }
 
 double Panel::delta() const {
