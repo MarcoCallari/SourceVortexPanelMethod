@@ -28,6 +28,26 @@ double integral(const Panel& panelI, const Panel& panelJ, const double s) {
             (std::pow(xi-xj,2)+std::pow(yi-yj,2));
 }
 
+//s \in [0,Panel.length()]
+double velocityIntegralX(const Point& point, const Panel& panelJ, const double s) {
+    const double xi = point.x;
+    const double yi = point.y;
+    const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
+    const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
+    return (xi-xj) /
+            (std::pow(xi-xj,2)+std::pow(yi-yj,2));
+}
+
+//s \in [0,Panel.length()]
+double velocityIntegralY(const Point& point, const Panel& panelJ, const double s) {
+    const double xi = point.x;
+    const double yi = point.y;
+    const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
+    const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
+    return (yi-yj) /
+            (std::pow(xi-xj,2)+std::pow(yi-yj,2));
+}
+
 double trapezoidal(const std::function<double(double x)>& func, const double min, const double max, const double step) {
     double result = 0;
     for(double val = min; val < max - step; val += step) {
@@ -45,7 +65,7 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<T>& objects) {
 }
 
 std::vector<Point> discretize() {
-    const int R = 1;
+    constexpr int R = 1;
     std::vector<Point> points;
     points.reserve(11);
     const double step = (2*M_PI) / 10; 
@@ -57,6 +77,7 @@ std::vector<Point> discretize() {
 
 int main(void) {
     Airfoil test(discretize());
+    /* Compute sigma values */
     Eigen::Matrix<double,10,10> A;
     Eigen::Matrix<double,10,1> b;
     for(int i = 0; i < test.panels().size(); ++i){ 
@@ -66,15 +87,69 @@ int main(void) {
                 const auto& panelJ = test.panels().at(j);
                 A(i, j) = 1/(2.0*M_PI) * trapezoidal([&panelI, &panelJ](const double s) { 
                         return integral(panelI, panelJ, s);
-                        }, 0.0, panelJ.length(), 1.0/100'000.0); 
+                        }, 0.0, panelJ.length(), 1.0/1'000.0); 
             }
             else {
-                //@TODO move to init
                 A(i, j)= 0.5;
             }
         }
         b[i] = -1.0*std::cos(test.panels().at(i).delta());
     }
-    std::cout << A.fullPivLu().solve(b) << std::endl;
+    const auto sigmaMatrix = A.fullPivLu().solve(b);
+    /* ---- */
+    int i = 0;
+    for(auto& panel : test.panels()) {
+        panel.setSigma(sigmaMatrix[i]);
+        ++i;
+    }
+    /* Mesh grid */
+    //x \in [-3.0,3.0]
+    //y \in [-3.0,3.0]
+    constexpr int numPoints = 100; 
+    constexpr double xStep = (3.0 - (-3.0)) / (numPoints - 1); 
+    constexpr double yStep = (3.0 - (-3.0)) / (numPoints - 1); 
+    double x[numPoints];
+    double y[numPoints];
+    for (int index = 0; index < numPoints; ++index) {
+        x[index] = -3.0 + index * xStep; 
+    }
+    for (int index = 0; index < numPoints; ++index) {
+        y[index] = -3.0 + index * yStep; 
+    }
+    /* ---- */
+    /* Compute x velocity */
+    {
+        double vX[numPoints][numPoints];
+        std::fill(*vX, *vX + numPoints*numPoints, 1); 
+        for (int indexY = 0; indexY < numPoints; ++indexY) {
+            std::cout << "[";
+            for (int indexX = 0; indexX < numPoints; ++indexX) {
+                for (const auto& panel : test.panels()) {
+                    vX[indexY][indexX] += panel.sigma() / (2.0*M_PI) * trapezoidal([&panel,&x,&y,indexX,indexY](const double s) { 
+                            return velocityIntegralX(Point(x[indexX], y[indexY]), panel, s); }, 0.0, panel.length(), 1.0/1'000); 
+                }
+                std::cout << vX[indexY][indexX] << ",";
+            }
+            std::cout << "]" << std::endl;
+        }
+    }
+    /* ---- */
+    /* Compute y velocity */
+    {
+        double vY[numPoints][numPoints];
+        std::fill(*vY, *vY + numPoints*numPoints, 1); 
+        for (int indexY = 0; indexY < numPoints; ++indexY) {
+            std::cout << "[";
+            for (int indexX = 0; indexX < numPoints; ++indexX) {
+                for (const auto& panel : test.panels()) {
+                    vY[indexY][indexX] += panel.sigma() / (2.0*M_PI) * trapezoidal([&panel,&x,&y,indexX,indexY](const double s) { 
+                            return velocityIntegralY(Point(x[indexX], y[indexY]), panel, s); }, 0.0, panel.length(), 1.0/1'000); 
+                }
+                std::cout << vY[indexY][indexX] << ",";
+            }
+            std::cout << "]" << std::endl;
+        }
+    }
+    /* ---- */
     return 0;
 }

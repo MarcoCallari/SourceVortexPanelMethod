@@ -41,6 +41,14 @@ double Panel::angleFromHorizontal() const {
     return m_angleFromHorizontal;
 }
 
+void Panel::setSigma(const double sigma) {
+    m_sigma = sigma;
+}
+
+double Panel::sigma() const {
+    return *m_sigma;
+}
+
 std::ostream& operator<<(std::ostream& stream, const Panel& panel) {
     stream << "[" << panel.m_start << "," << panel.m_end << "]";
     return stream;

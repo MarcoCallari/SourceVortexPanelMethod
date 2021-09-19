@@ -10,3 +10,7 @@ Airfoil::Airfoil(const std::vector<Point>& points) {
 const std::vector<Panel>& Airfoil::panels() const {
     return m_panels;
 }
+
+std::vector<Panel>& Airfoil::panels() {
+    return m_panels;
+}

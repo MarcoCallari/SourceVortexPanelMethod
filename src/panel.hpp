@@ -1,5 +1,6 @@
 #pragma once 
 #include "point.hpp"
+#include <optional>
 #include <iosfwd>
 
 class Panel {
@@ -11,6 +12,8 @@ public:
     const Point& controlPoint() const;
     const Point& endPoint() const;
     double angleFromHorizontal() const;
+    void setSigma(const double sigma);
+    double sigma() const;
 private:
     Point m_start;
     Point m_end;
@@ -18,5 +21,6 @@ private:
     double m_delta;
     double m_angleFromHorizontal;
     double m_length;
+    std::optional<double> m_sigma;
     friend std::ostream& operator<<(std::ostream& stream, const Panel& panel);
 };
