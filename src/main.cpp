@@ -9,6 +9,7 @@
   #define _USE_MATH_DEFINES
 #endif
 #include <cmath>
+#include <matplot/matplot.h>
 #include "panel.hpp"
 #include "airfoil.hpp"
 #include <functional>
@@ -117,8 +118,11 @@ int main(void) {
         y[index] = -3.0 + index * yStep; 
     }
     /* ---- */
+    auto xM = matplot::linspace(-3.0, 3.0, 100);
+    auto yM = matplot::linspace(-3.0, 3.0, 100);
+    auto [X, Y] = matplot::meshgrid(xM, yM);
     /* Compute x velocity */
-    {
+    /*{
         double vX[numPoints][numPoints];
         std::fill(*vX, *vX + numPoints*numPoints, 1); 
         for (int indexY = 0; indexY < numPoints; ++indexY) {
@@ -132,10 +136,10 @@ int main(void) {
             }
             std::cout << "]" << std::endl;
         }
-    }
+    }*/
     /* ---- */
     /* Compute y velocity */
-    {
+    /*{
         double vY[numPoints][numPoints];
         std::fill(*vY, *vY + numPoints*numPoints, 1); 
         for (int indexY = 0; indexY < numPoints; ++indexY) {
@@ -149,7 +153,25 @@ int main(void) {
             }
             std::cout << "]" << std::endl;
         }
-    }
+    }*/
+    auto u = matplot::transform(X,Y, [&test](const double x, const double y) { 
+            double u = 1; // V_inf
+            for (const auto& panel : test.panels()) {
+                u += panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x,y](const double s) {
+                        return velocityIntegralX(Point(x,y),panel,s);
+                        }, 0.0, panel.length(), 1.0/ 1'000.0);
+                }
+            return  u; });
+    auto v = matplot::transform(X,Y, [&test](const double x, const double y) { 
+            double v = 0; // V_inf
+            for (const auto& panel : test.panels()) {
+                v += panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x,y](const double s) {
+                        return velocityIntegralY(Point(x,y),panel,s);
+                        }, 0.0, panel.length(), 1.0/ 1'000.0);
+                }
+            return  v; });
+    matplot::quiver(X,Y,u, v);
+    matplot::show();
     /* ---- */
     return 0;
 }
