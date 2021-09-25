@@ -1,6 +1,6 @@
 /* ----------
  *               TODO
- *
+ * - Interpolazione lineare per trovare y dei pannelli
  *
  *
  * ----------
@@ -67,7 +67,8 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<T>& objects) {
 }
 
 int main(void) {
-    Airfoil test(*ProfileDeserializer::open("/home/noon/C++/integral2/naca0012.dat"));
+    Airfoil test(*ProfileDeserializer::open("/home/noon/C++/integral2/naca0012.dat"), 40);
+    std::cout << test.panels() << std::endl;
     /* Compute sigma values */
     Eigen::MatrixXd A;
     A.resize(test.panels().size(), test.panels().size());
@@ -137,7 +138,7 @@ int main(void) {
     /* ---- */
     /* Compute y velocity */
     {
-        double vY[numPoints][numPoints];
+       double vY[numPoints][numPoints];
         std::fill(*vY, *vY + numPoints*numPoints, 1); 
         for (int indexY = 0; indexY < numPoints; ++indexY) {
             //std::cout << "[";

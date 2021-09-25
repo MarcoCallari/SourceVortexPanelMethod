@@ -5,7 +5,7 @@
 
 class Airfoil {
 public:
-    Airfoil(const std::vector<Point>& points);
+    Airfoil(const std::vector<Point>& points, const int nPanels);
     const std::vector<Panel>& panels() const;
     std::vector<Panel>& panels();
 private:
