@@ -1,8 +1,7 @@
 /* ----------
  *               TODO
- * - Interpolazione lineare per trovare y dei pannelli
- *
- *
+ * - Costruire matrice velocità [u,v]
+ * - Salvare il risultato in un file txt e plottare con python
  * ----------
  */
 #ifndef _USE_MATH_DEFINES
@@ -50,6 +49,7 @@ double velocityIntegralY(const Point& point, const Panel& panelJ, const double s
             (std::pow(xi-xj,2)+std::pow(yi-yj,2));
 }
 
+//@TODO move to a Gaussian method, parallelize, use fast delegate
 double trapezoidal(const std::function<double(double x)>& func, const double min, const double max, const double step) {
     double result = 0;
     for(double val = min; val < max - step; val += step) {
@@ -68,7 +68,6 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<T>& objects) {
 
 int main(void) {
     Airfoil test(*ProfileDeserializer::open("/home/noon/C++/integral2/naca0012.dat"), 40);
-    std::cout << test.panels() << std::endl;
     /* Compute sigma values */
     Eigen::MatrixXd A;
     A.resize(test.panels().size(), test.panels().size());
@@ -92,7 +91,6 @@ int main(void) {
     const auto factorizedMatrix =  A.fullPivLu();
     const auto sigmaMatrix = factorizedMatrix.solve(b);
     /* ---- */
-    std::cout << sigmaMatrix << std::endl;
     int i = 0;
     double sum = 0;
     for(auto& panel : test.panels()) {
@@ -100,77 +98,46 @@ int main(void) {
       sum += sigmaMatrix(i,0);
       ++i;
     }
-    std::cout << "SUM " << sum << std::endl;
+    //std::cout << test.panels() << std::endl;
+    return 0;
     /* Mesh grid */
     //x \in [-3.0,3.0]
     //y \in [-3.0,3.0]
     constexpr int numPoints = 100; 
-    constexpr double xStep = (3.0 - (-3.0)) / (numPoints - 1); 
-    constexpr double yStep = (3.0 - (-3.0)) / (numPoints - 1); 
+    constexpr double xStep = (1.25 - (-0.25)) / (numPoints - 1); 
+    constexpr double yStep = (0.2 - (-0.2)) / (numPoints - 1); 
     double x[numPoints];
     double y[numPoints];
     for (int index = 0; index < numPoints; ++index) {
-      x[index] = -3.0 + index * xStep; 
+      x[index] = -0.25 + index * xStep; 
     }
     for (int index = 0; index < numPoints; ++index) {
-      y[index] = -3.0 + index * yStep; 
+      y[index] = -0.2 + index * yStep; 
     }
-    /* ---- */
-    // auto xM = matplot::linspace(-3.0, 3.0, 100);
-    // auto yM = matplot::linspace(-3.0, 3.0, 100);
-    // auto [X, Y] = matplot::meshgrid(xM, yM);
-    /* Compute x velocity */
-    {
-        double vX[numPoints][numPoints];
-        std::fill(*vX, *vX + numPoints*numPoints, 1); 
-        for (int indexY = 0; indexY < numPoints; ++indexY) {
-            //std::cout << "[";
-            for (int indexX = 0; indexX < numPoints; ++indexX) {
-                for (const auto& panel : test.panels()) {
-                    vX[indexY][indexX] += panel.sigma() / (2.0*M_PI) * trapezoidal([&panel,&x,&y,indexX,indexY](const double s) { 
-                            return velocityIntegralX(Point(x[indexX], y[indexY]), panel, s); }, 0.0, panel.length(), 1.0/1'000); 
-                }
-                //std::cout << vX[indexY][indexX] << ",";
+    const double stepX = (1.25 - (-0.25)) / 100.0;
+    const double stepY = (0.2 - (-0.2)) / 100.0;
+    Eigen::MatrixXd u;
+    Eigen::MatrixXd v;
+    u.resize(numPoints,numPoints);
+    v.resize(numPoints,numPoints);
+    for (const auto& panel : test.panels()) {
+        for (size_t indexX = 0; indexX < numPoints; ++indexX) {
+            for (size_t indexY = 0; indexY < numPoints; ++indexY) {
+            u(indexX, indexY) =  1.0 + panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x, y, indexX, indexY](const double s) {
+                    return velocityIntegralX(Point(x[indexX],y[indexY]),panel,s);
+                    }, 0.0, panel.length(), 1.0/ 1'000.0);
+            v(indexX, indexY) = panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x, y, indexX, indexY](const double s) {
+                    return velocityIntegralY(Point(x[indexX],y[indexY]),panel,s);
+                    }, 0.0, panel.length(), 1.0/ 1'000.0);
             }
-            //std::cout << "]" << std::endl;
         }
     }
+    std::cout << "U" << std::endl;
+    std::cout << u << std::endl;
+    std::cout << "END U" << std::endl;
+    std::cout << "V" << std::endl;
+    std::cout << v << std::endl;
+    std::cout << "END V" << std::endl;
     /* ---- */
-    /* Compute y velocity */
-    {
-       double vY[numPoints][numPoints];
-        std::fill(*vY, *vY + numPoints*numPoints, 1); 
-        for (int indexY = 0; indexY < numPoints; ++indexY) {
-            //std::cout << "[";
-            for (int indexX = 0; indexX < numPoints; ++indexX) {
-                for (const auto& panel : test.panels()) {
-                    vY[indexY][indexX] += panel.sigma() / (2.0*M_PI) * trapezoidal([&panel,&x,&y,indexX,indexY](const double s) { 
-                            return velocityIntegralY(Point(x[indexX], y[indexY]), panel, s); }, 0.0, panel.length(), 1.0/1'000); 
-                }
-                //std::cout << vY[indexY][indexX] << ",";
-            }
-            //std::cout << "]" << std::endl;
-        }
-    }
-    /* ---- */
-    // auto u = matplot::transform(X,Y, [&test](const double x, const double y) { 
-            // double u = 1; // V_inf
-            // for (const auto& panel : test.panels()) {
-                // u += panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x,y](const double s) {
-                        // return velocityIntegralX(Point(x,y),panel,s);
-                        // }, 0.0, panel.length(), 1.0/ 1'000.0);
-                // }
-            // return  u; });
-    // auto v = matplot::transform(X,Y, [&test](const double x, const double y) { 
-            // double v = 0; // V_inf
-            // for (const auto& panel : test.panels()) {
-                // v += panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x,y](const double s) {
-                        // return velocityIntegralY(Point(x,y),panel,s);
-                        // }, 0.0, panel.length(), 1.0/ 1'000.0);
-                // }
-            // return  v; });
-     // matplot::quiver(X,Y,u, v);
-     // matplot::show();
-     /* ---- */
-     return 0;
+    return 0;
 }

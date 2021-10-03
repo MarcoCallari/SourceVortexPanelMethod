@@ -1,5 +1,5 @@
 #include "point.hpp"
-#include <iostream>
+#include <ostream>
 
 std::ostream& operator<<(std::ostream& stream, const Point& point) {
     stream << "[" << point.x << "," << point.y << "]";

@@ -5,8 +5,10 @@
 #include "airfoil.hpp"
 #include <algorithm>
 #include <assert.h>
+#include <iostream>
 
 
+//@TODO builder pattern
 Airfoil::Airfoil(const std::vector<Point>& originalPoints, const int nPanels) {
     if(!originalPoints.empty()) {
         auto points = originalPoints;
@@ -45,6 +47,8 @@ Airfoil::Airfoil(const std::vector<Point>& originalPoints, const int nPanels) {
             circleY.push_back((x-points.at(index).x) / (points.at(index+1).x - points.at(index).x) * (points.at(index+1).y - points.at(index).y) + points.at(index).y);
         }
         m_panels.reserve(nPanels);
+        for (double y: circleY)
+            std::cout << y << "," << std::endl;
         for(size_t index = 0; index < nPanels; ++index) {
             m_panels.emplace_back(Point(circleX.at(index), circleY.at(index)), Point(circleX.at(index+1), circleY.at(index+1))); 
         }

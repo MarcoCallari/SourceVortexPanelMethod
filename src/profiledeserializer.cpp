@@ -9,6 +9,7 @@ namespace ProfileDeserializer {
         std::vector<std::string_view> tokens;
         auto string = inString;
         auto pos = string.find(separator);
+        //@TODO review
         while(pos != std::string::npos) {
             tokens.emplace_back(string.substr(0, pos));
             string.remove_prefix(pos + 1);
@@ -23,7 +24,7 @@ namespace ProfileDeserializer {
     std::optional<std::vector<Point>> open(const std::filesystem::path& path) {
         errno = 0;
         FILE* fp = fopen(path.c_str(), "r");
-        if (fp == NULL){
+        if (fp == nullptr){
             auto er = errno;
             printf("Could not open file. Error number: %i.", er);
             return {};
@@ -36,6 +37,7 @@ namespace ProfileDeserializer {
             std::string_view view(line);
             const auto tokens = tokenize(view, '\t');
             auto tokenIt = tokens.begin();
+            //@TODO review
             while(tokenIt < tokens.cend()) {
                 auto tokenSize = tokenIt->size();
                 double x = std::stod(tokenIt->data(), &tokenSize);
