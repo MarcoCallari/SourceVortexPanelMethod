@@ -12,12 +12,13 @@
 
 
 //s \in [0,Panel.length()]
-double integral(const Panel& panelI, const Panel& panelJ, const double s) {
+inline double integral(const Panel& panelI, const Panel& panelJ, const double s) {
     const double xi = panelI.controlPoint().x;
     const double yi = panelI.controlPoint().y;
     const double deltai = panelI.delta();
-    const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
-    const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
+    const auto t = (s / panelJ.length());
+    const double xj = (1 - t) * panelJ.startPoint().x + t * panelJ.endPoint().x;
+    const double yj = (1 - t) * panelJ.startPoint().y + t * panelJ.endPoint().y;
     return ((xi-xj)*std::cos(deltai)+(yi-yj)*std::sin(deltai)) /
             ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
@@ -26,8 +27,9 @@ double integral(const Panel& panelI, const Panel& panelJ, const double s) {
 inline double velocityIntegrandX(const Point& point, const Panel& panelJ, const double s) {
     const double xi = point.x;
     const double yi = point.y;
-    const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
-    const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
+    const auto t = (s / panelJ.length());
+    const double xj = (1 - t) * panelJ.startPoint().x + t * panelJ.endPoint().x;
+    const double yj = (1 - t) * panelJ.startPoint().y + t * panelJ.endPoint().y;
     return (xi-xj) /
             ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
@@ -36,8 +38,9 @@ inline double velocityIntegrandX(const Point& point, const Panel& panelJ, const 
 inline double velocityIntegrandY(const Point& point, const Panel& panelJ, const double s) {
     const double xi = point.x;
     const double yi = point.y;
-    const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
-    const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
+    const auto t = (s / panelJ.length());
+    const double xj = (1 - t) * panelJ.startPoint().x + t * panelJ.endPoint().x;
+    const double yj = (1 - t) * panelJ.startPoint().y + t * panelJ.endPoint().y;
     return (yi-yj) /
             ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
