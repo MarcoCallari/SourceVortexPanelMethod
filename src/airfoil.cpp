@@ -8,7 +8,7 @@
 #include <iostream>
 
 
-std::optional<Airfoil> Airfoil::points_into_panels(const std::vector<Point>& originalPoints, const int nPanels) {
+std::optional<Airfoil> Airfoil::points_into_panels(const std::vector<Point>& originalPoints, const size_t nPanels) {
     if (originalPoints.empty()) {
       return {};
     }
@@ -16,12 +16,8 @@ std::optional<Airfoil> Airfoil::points_into_panels(const std::vector<Point>& ori
     points.emplace_back(originalPoints.at(0));
     const double maxX = std::max_element(points.cbegin(), points.cend(), 
             [](const auto& point1, const auto& point2) { return point1.x < point2.x; })->x;
-    const double maxY = std::max_element(points.cbegin(), points.cend(), 
-            [](const auto& point1, const auto& point2) { return point1.x < point2.x; })->y;
     const double minX = std::min_element(points.cbegin(), points.cend(), 
             [](const auto& point1, const auto& point2) { return point1.x < point2.x; })->x;
-    const double minY = std::min_element(points.cbegin(), points.cend(), 
-            [](const auto& point1, const auto& point2) { return point1.x < point2.x; })->y;
     const double R = (maxX - minX) / 2.0; 
     const double centerX = (maxX + minX) / 2.0; 
     std::vector<double> circleX;

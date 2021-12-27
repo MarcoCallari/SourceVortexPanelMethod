@@ -4,14 +4,12 @@
 #include <cmath>
 #include "panel.hpp"
 #include "airfoil.hpp"
-#include <functional>
 #include <vector>
-#include <iostream>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include "profiledeserializer.hpp"
-//@TODO remove
 #include <fstream>
+
 
 //s \in [0,Panel.length()]
 double integral(const Panel& panelI, const Panel& panelJ, const double s) {
@@ -21,35 +19,31 @@ double integral(const Panel& panelI, const Panel& panelJ, const double s) {
     const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
     const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
     return ((xi-xj)*std::cos(deltai)+(yi-yj)*std::sin(deltai)) /
-            (std::pow(xi-xj,2)+std::pow(yi-yj,2));
+            ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
 
 //s \in [0,Panel.length()]
-double velocityIntegralX(const Point& point, const Panel& panelJ, const double s) {
+inline double velocityIntegrandX(const Point& point, const Panel& panelJ, const double s) {
     const double xi = point.x;
     const double yi = point.y;
     const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
     const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
-    // const double xj = panelJ.startPoint().x - s*std::sin(panelJ.delta());
-    // const double yj = panelJ.startPoint().y + s*std::cos(panelJ.delta());
     return (xi-xj) /
-            (std::pow(xi-xj,2)+std::pow(yi-yj,2));
+            ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
 
 //s \in [0,Panel.length()]
-double velocityIntegralY(const Point& point, const Panel& panelJ, const double s) {
+inline double velocityIntegrandY(const Point& point, const Panel& panelJ, const double s) {
     const double xi = point.x;
     const double yi = point.y;
     const double xj = panelJ.startPoint().x + s*std::cos(panelJ.angleFromHorizontal());
     const double yj = panelJ.startPoint().y + s*std::sin(panelJ.angleFromHorizontal());
-    // const double xj = panelJ.startPoint().x - s*std::sin(panelJ.delta());
-    // const double yj = panelJ.startPoint().y + s*std::cos(panelJ.delta());
     return (yi-yj) /
-            (std::pow(xi-xj,2)+std::pow(yi-yj,2));
+            ((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj));
 }
 
-//@TODO move to a Gaussian method, parallelize, use fast delegate(maybe? TBD)
-double trapezoidal(const std::function<double(double x)>& func, const double min, const double max, const double step) {
+template <typename F>
+inline double trapezoidal(const F& func, const double min, const double max, const double step) {
     double result = 0;
     for(double val = min; val < max - step; val += step) {
             result += ((func(val) + func(val+step)) / 2.0)*(step);
@@ -74,8 +68,8 @@ int main(void) {
     Eigen::Matrix<double, panelsNumber, 1> b;
     std::ofstream file_a("./out_a.txt");
     assert(file_a.good());
-    for(int i = 0; i < test.panels().size(); ++i){ 
-        for(int j = 0; j < test.panels().size(); ++j) {
+    for(size_t i = 0; i < test.panels().size(); ++i){ 
+        for(size_t j = 0; j < test.panels().size(); ++j) {
             if(i!=j) {
                 const auto& panelI = test.panels().at(i);
                 const auto& panelJ = test.panels().at(j);
@@ -118,16 +112,16 @@ int main(void) {
     u.setOnes(numPoints, numPoints);
     Eigen::Matrix<double, numPoints, numPoints> v;
     v.setZero(numPoints, numPoints);
+    #pragma omp parallel for 
     for (size_t indexY = 0; indexY < numPoints; ++indexY) {
         for (size_t indexX = 0; indexX < numPoints; ++indexX) {
-            //@TODO parallelize
             for (const auto& panel : test.panels()) {
-                u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * trapezoidal([&panel, x, y, indexX, indexY](const double s) {
-                        return velocityIntegralX(Point(x[indexX],y[indexY]),panel,s);
-                        }, 0.0, panel.length(), 1.0/ 10'000.0);
-                v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) * trapezoidal([&panel, x, y, indexX, indexY](const double s) {
-                        return velocityIntegralY(Point(x[indexX],y[indexY]),panel,s);
-                        }, 0.0, panel.length(), 1.0/ 10'000.0);
+                const auto velIntX = [&panel, x, y, indexX, indexY](const double s) {
+                        return velocityIntegrandX(Point(x[indexX],y[indexY]),panel,s); };
+                u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * trapezoidal(velIntX, 0, panel.length(), 1.0/10'000);
+                const auto velIntY = [&panel, x, y, indexX, indexY](const double s) {
+                        return velocityIntegrandY(Point(x[indexX],y[indexY]),panel,s); };
+                v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) *  trapezoidal(velIntY, 0, panel.length(), 1.0/10'000);
             }
         }
     }
