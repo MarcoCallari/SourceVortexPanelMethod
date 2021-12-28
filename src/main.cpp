@@ -78,20 +78,30 @@ double velocityFunctionY(double s, void * params) {
     return velocityIntegrandY(p->point, *p->panel, s);
 }
 
-int main(void) {
-    const auto points = *ProfileDeserializer::open("E:/Codice/c++/integral2/naca0012.dat");
+int main(int argv, char** argc) {
+    if (argv < 2) {
+        printf("Please provide a file containing the airfoil data! Format must be the same used by the airfoiltools.com website.\n");
+        return -1;
+    }
+    const auto points = ProfileDeserializer::open(argc[1]);
+    if (!points) {
+      printf("Could not parse file %s.\n", argc[1]);
+    }
     constexpr int panelsNumber = 40;
-    auto test = *Airfoil::points_into_panels(points, panelsNumber);
+    auto test = Airfoil::points_into_panels(*points, panelsNumber);
+    if (!test) {
+      printf("Could not create a closed profile using file %s.\n", argc[1]);
+    }
     /* Compute sigma values */
     Eigen::Matrix<double, panelsNumber, panelsNumber> A;
     Eigen::Matrix<double, panelsNumber, 1> b;
     std::ofstream file_a("./out_a.txt");
     assert(file_a.good());
-    for(size_t i = 0; i < test.panels().size(); ++i){ 
-        for(size_t j = 0; j < test.panels().size(); ++j) {
+    for(size_t i = 0; i < test->panels().size(); ++i){ 
+        for(size_t j = 0; j < test->panels().size(); ++j) {
             if(i!=j) {
-                const auto& panelI = test.panels().at(i);
-                const auto& panelJ = test.panels().at(j);
+                const auto& panelI = test->panels().at(i);
+                const auto& panelJ = test->panels().at(j);
                 A(i, j) = 1/(2.0*M_PI) * trapezoidal([&panelI, &panelJ](const double s) { 
                         return integral(panelI, panelJ, s);
                         }, 0.0, panelJ.length(), 1.0/10'000.0); 
@@ -100,14 +110,14 @@ int main(void) {
                 A(i, j)= 0.5;
             }
         }
-        b(i) = -1.0*std::cos(test.panels().at(i).delta());
+        b(i) = -1.0*std::cos(test->panels().at(i).delta());
     }
     const auto factorizedMatrix =  A.fullPivLu();
     const auto sigmaMatrix = factorizedMatrix.solve(b);
     /* ---- */
     int i = 0;
     double sum = 0;
-    for(auto& panel : test.panels()) {
+    for(auto& panel : test->panels()) {
       panel.setSigma(sigmaMatrix(i, 0));
       sum += sigmaMatrix(i,0);
       ++i;
@@ -134,7 +144,7 @@ int main(void) {
     auto* w = gsl_integration_workspace_alloc(1'000);
     for (size_t indexY = 0; indexY < numPoints; ++indexY) {
         for (size_t indexX = 0; indexX < numPoints; ++indexX) {
-            for (const auto& panel : test.panels()) {
+            for (const auto& panel : test->panels()) {
                 gsl_function integrand;
                 integrand.function = velocityFunctionX;
                 VelocityIntegralParameters p = { &panel, Point(x[indexX], y[indexY]) };
