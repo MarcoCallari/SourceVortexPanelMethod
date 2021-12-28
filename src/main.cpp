@@ -2,13 +2,14 @@
   #define _USE_MATH_DEFINES
 #endif
 #include <cmath>
-#include "panel.hpp"
-#include "airfoil.hpp"
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Dense>
-#include "profiledeserializer.hpp"
 #include <fstream>
+#include "panel.hpp"
+#include "airfoil.hpp"
+#include "profiledeserializer.hpp"
+#include <gsl/gsl_integration.h>
 
 
 //s \in [0,Panel.length()]
@@ -60,6 +61,24 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<T>& objects) {
         stream << obj << "\n";
     }
     return stream;
+}
+
+struct VelocityParameters {
+    const Panel* panel;
+    const double* x;
+    const double* y;
+    size_t indexX;
+    size_t indexY;
+};
+
+double velocityFunctionX(double s, void * params) {
+    const auto p = reinterpret_cast<VelocityParameters*>(params);
+    return velocityIntegrandX(Point(p->x[p->indexX], p->y[p->indexY]), *p->panel, s);
+}
+
+double velocityFunctionY(double s, void * params) {
+    const auto p = reinterpret_cast<VelocityParameters*>(params);
+    return velocityIntegrandY(Point(p->x[p->indexX], p->y[p->indexY]), *p->panel, s);
 }
 
 int main(void) {
@@ -115,19 +134,37 @@ int main(void) {
     u.setOnes(numPoints, numPoints);
     Eigen::Matrix<double, numPoints, numPoints> v;
     v.setZero(numPoints, numPoints);
-    #pragma omp parallel for 
+    double maxerrX = 0.0;
+    double maxerrY = 0.0;
+    //#pragma omp parallel for 
     for (size_t indexY = 0; indexY < numPoints; ++indexY) {
         for (size_t indexX = 0; indexX < numPoints; ++indexX) {
             for (const auto& panel : test.panels()) {
-                const auto velIntX = [&panel, x, y, indexX, indexY](const double s) {
-                        return velocityIntegrandX(Point(x[indexX],y[indexY]),panel,s); };
-                u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * trapezoidal(velIntX, 0, panel.length(), 1.0/10'000);
-                const auto velIntY = [&panel, x, y, indexX, indexY](const double s) {
-                        return velocityIntegrandY(Point(x[indexX],y[indexY]),panel,s); };
-                v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) *  trapezoidal(velIntY, 0, panel.length(), 1.0/10'000);
+                gsl_function integrand;
+                integrand.function = velocityFunctionX;
+                VelocityParameters p;
+                p.panel = &panel;
+                p.x = x;
+                p.y = y;
+                p.indexX = indexX;
+                p.indexY = indexY;
+                integrand.params = reinterpret_cast<void*>(&p);
+                double result = 0;
+                double abserr = 0;
+                size_t calls = 0;
+                gsl_integration_qng(&integrand, 0, panel.length(), 100, 100, &result, &abserr, &calls);
+                u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * result;
+                if (abserr > maxerrX) maxerrX = abserr;
+                assert(abserr < 1);
+                integrand.function = velocityFunctionY;
+                gsl_integration_qng(&integrand, 0, panel.length(), 100, 100, &result, &abserr, &calls);
+                if (abserr > maxerrY) maxerrY = abserr;
+                assert(abserr < 1);
+                v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) * result;
             }
         }
     }
+    printf("Max err v_x : %f, max err v_y : %f\n", maxerrX, maxerrY);
     std::ofstream file_u("./out_u.txt");
     assert(file_u.good());
     file_u << u;
