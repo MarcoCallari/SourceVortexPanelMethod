@@ -42,8 +42,8 @@ std::optional<Airfoil> Airfoil::points_into_panels(const std::vector<Point>& ori
     }
     Airfoil foil;
     foil.m_panels.reserve(nPanels);
-    for(size_t index = 0; index < nPanels; ++index) {
-        foil.m_panels.emplace_back(Point(circleX.at(index), circleY.at(index)), Point(circleX.at(index+1), circleY.at(index+1))); 
+    for(size_t pointIndex = 0; pointIndex < nPanels; ++pointIndex) {
+        foil.m_panels.emplace_back(Point(circleX.at(pointIndex), circleY.at(pointIndex)), Point(circleX.at(pointIndex+1), circleY.at(pointIndex+1))); 
     }
     return foil;
 }

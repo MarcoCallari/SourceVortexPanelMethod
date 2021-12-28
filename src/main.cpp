@@ -63,26 +63,23 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<T>& objects) {
     return stream;
 }
 
-struct VelocityParameters {
+struct VelocityIntegralParameters {
     const Panel* panel;
-    const double* x;
-    const double* y;
-    size_t indexX;
-    size_t indexY;
+    Point point;
 };
 
 double velocityFunctionX(double s, void * params) {
-    const auto p = reinterpret_cast<VelocityParameters*>(params);
-    return velocityIntegrandX(Point(p->x[p->indexX], p->y[p->indexY]), *p->panel, s);
+    const auto p = reinterpret_cast<VelocityIntegralParameters*>(params);
+    return velocityIntegrandX(p->point, *p->panel, s);
 }
 
 double velocityFunctionY(double s, void * params) {
-    const auto p = reinterpret_cast<VelocityParameters*>(params);
-    return velocityIntegrandY(Point(p->x[p->indexX], p->y[p->indexY]), *p->panel, s);
+    const auto p = reinterpret_cast<VelocityIntegralParameters*>(params);
+    return velocityIntegrandY(p->point, *p->panel, s);
 }
 
 int main(void) {
-    const auto points = *ProfileDeserializer::open("/home/noon/C++/integral2/naca0012.dat");
+    const auto points = *ProfileDeserializer::open("E:/Codice/c++/integral2/naca0012.dat");
     constexpr int panelsNumber = 40;
     auto test = *Airfoil::points_into_panels(points, panelsNumber);
     /* Compute sigma values */
@@ -117,8 +114,6 @@ int main(void) {
     }
     file_a << sigmaMatrix << "\n";
     /* Mesh grid */
-    //x \in [-3.0,3.0]
-    //y \in [-3.0,3.0]
     constexpr int numPoints = 100; 
     constexpr double xStep = (1.25 - (-0.25)) / (numPoints - 1); 
     constexpr double yStep = (0.2 - (-0.2)) / (numPoints - 1); 
@@ -136,35 +131,25 @@ int main(void) {
     v.setZero(numPoints, numPoints);
     double maxerrX = 0.0;
     double maxerrY = 0.0;
-    //#pragma omp parallel for 
+    auto* w = gsl_integration_workspace_alloc(1'000);
     for (size_t indexY = 0; indexY < numPoints; ++indexY) {
         for (size_t indexX = 0; indexX < numPoints; ++indexX) {
             for (const auto& panel : test.panels()) {
                 gsl_function integrand;
                 integrand.function = velocityFunctionX;
-                VelocityParameters p;
-                p.panel = &panel;
-                p.x = x;
-                p.y = y;
-                p.indexX = indexX;
-                p.indexY = indexY;
+                VelocityIntegralParameters p = { &panel, Point(x[indexX], y[indexY]) };
                 integrand.params = reinterpret_cast<void*>(&p);
                 double result = 0;
                 double abserr = 0;
-                size_t calls = 0;
-                gsl_integration_qng(&integrand, 0, panel.length(), 100, 100, &result, &abserr, &calls);
+                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w, &result, &abserr);
                 u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * result;
-                if (abserr > maxerrX) maxerrX = abserr;
-                assert(abserr < 1);
                 integrand.function = velocityFunctionY;
-                gsl_integration_qng(&integrand, 0, panel.length(), 100, 100, &result, &abserr, &calls);
-                if (abserr > maxerrY) maxerrY = abserr;
-                assert(abserr < 1);
+                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w, &result, &abserr);
                 v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) * result;
             }
         }
     }
-    printf("Max err v_x : %f, max err v_y : %f\n", maxerrX, maxerrY);
+    gsl_integration_workspace_free(w);
     std::ofstream file_u("./out_u.txt");
     assert(file_u.good());
     file_u << u;
