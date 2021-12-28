@@ -3,6 +3,7 @@ set(SOURCE
     airfoil.cpp
     panel.cpp
     profiledeserializer.cpp
+    stackworkspace.hpp
     main.cpp
     )
 add_executable(integral ${SOURCE})

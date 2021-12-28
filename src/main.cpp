@@ -9,6 +9,7 @@
 #include "panel.hpp"
 #include "airfoil.hpp"
 #include "profiledeserializer.hpp"
+#include "stackworkspace.hpp"
 #include <gsl/gsl_integration.h>
 
 
@@ -69,6 +70,7 @@ double velocityFunctionY(double s, void * params) {
     return velocityIntegrandY(p->point, *p->panel, s);
 }
 
+//@TODO: create a workspace entirely on the stack. avoid dynamic allocations!
 int main(int argv, char** argc) {
     if (argv < 2) {
         printf("Please provide a file containing the airfoil data! Format must be the same used by the airfoiltools.com website.\n");
@@ -88,17 +90,17 @@ int main(int argv, char** argc) {
     Eigen::Matrix<double, panelsNumber, 1> b;
     std::ofstream file_a("./out_a.txt");
     assert(file_a.good());
-    auto* w = gsl_integration_workspace_alloc(1'000);
-    for(size_t i = 0; i < test->panels().size(); ++i){ 
-        for(size_t j = 0; j < test->panels().size(); ++j) {
+    for(int i = 0; i < test->panels().size(); ++i){ 
+        for(int j = 0; j < test->panels().size(); ++j) {
             if(i!=j) {
+                gsl::StackWorkspace<1000> w;
                 SigmaIntegralParameters p { &test->panels()[i], &test->panels()[j] };
                 gsl_function integrand;
                 integrand.function = sigmaIntegral;
                 integrand.params = reinterpret_cast<void*>(&p);
                 double result = 0;
                 double abserr = 0;
-                gsl_integration_qags(&integrand, 0, test->panels()[j].length(), 1.49e-8, 1.49e-8, 1'000, w, &result, &abserr);
+                gsl_integration_qags(&integrand, 0, test->panels()[j].length(), 1.49e-8, 1.49e-8, 1'000, w.ptr(), &result, &abserr);
                 A(i, j) = 1 / (2.0 * M_PI) * result;
             }
             else {
@@ -134,24 +136,25 @@ int main(int argv, char** argc) {
     u.setOnes(numPoints, numPoints);
     Eigen::Matrix<double, numPoints, numPoints> v;
     v.setZero(numPoints, numPoints);
-    for (size_t indexY = 0; indexY < numPoints; ++indexY) {
-        for (size_t indexX = 0; indexX < numPoints; ++indexX) {
+    #pragma omp parallel for 
+    for (int indexY = 0; indexY < numPoints; ++indexY) {
+        for (int indexX = 0; indexX < numPoints; ++indexX) {
             for (const auto& panel : test->panels()) {
+                gsl::StackWorkspace<1000> w;
                 gsl_function integrand;
                 integrand.function = velocityFunctionX;
                 VelocityIntegralParameters p = { &panel, Point(x[indexX], y[indexY]) };
                 integrand.params = reinterpret_cast<void*>(&p);
                 double result = 0;
                 double abserr = 0;
-                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w, &result, &abserr);
+                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w.ptr(), &result, &abserr);
                 u(indexY, indexX) += (panel.sigma() / (2.0 * M_PI)) * result;
                 integrand.function = velocityFunctionY;
-                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w, &result, &abserr);
+                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w.ptr(), &result, &abserr);
                 v(indexY, indexX) += panel.sigma() / (2.0 * M_PI) * result;
             }
         }
     }
-    gsl_integration_workspace_free(w);
     std::ofstream file_u("./out_u.txt");
     assert(file_u.good());
     file_u << u;
