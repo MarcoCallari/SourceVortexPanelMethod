@@ -70,7 +70,6 @@ double velocityFunctionY(double s, void * params) {
     return velocityIntegrandY(p->point, *p->panel, s);
 }
 
-//@TODO: create a workspace entirely on the stack. avoid dynamic allocations!
 int main(int argv, char** argc) {
     if (argv < 2) {
         printf("Please provide a file containing the airfoil data! Format must be the same used by the airfoiltools.com website.\n");
@@ -90,8 +89,9 @@ int main(int argv, char** argc) {
     Eigen::Matrix<double, panelsNumber, 1> b;
     std::ofstream file_a("./out_a.txt");
     assert(file_a.good());
-    for(int i = 0; i < test->panels().size(); ++i){ 
-        for(int j = 0; j < test->panels().size(); ++j) {
+    const int numPanels = static_cast<int>(test->panels().size());
+    for(int i = 0; i < numPanels; ++i){ 
+        for(int j = 0; j < numPanels; ++j) {
             if(i!=j) {
                 gsl::StackWorkspace<1000> w;
                 SigmaIntegralParameters p { &test->panels()[i], &test->panels()[j] };
