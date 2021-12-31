@@ -11,6 +11,8 @@
 #include "profiledeserializer.hpp"
 #include "stackworkspace.hpp"
 #include <gsl/gsl_integration.h>
+#include <mgl2/mgl.h>
+#include <mgl2/glut.h>
 
 
 struct SigmaIntegralParameters {
@@ -68,6 +70,31 @@ double velocityFunctionX(double s, void * params) {
 double velocityFunctionY(double s, void * params) {
     const auto p = reinterpret_cast<VelocityIntegralParameters*>(params);
     return velocityIntegrandY(p->point, *p->panel, s);
+}
+
+struct StreamFunctionIntegralParameters {
+    const Panel* panel;
+    Point point;
+};
+
+double streamFunction(double s, void * params) {
+    const auto p = reinterpret_cast<StreamFunctionIntegralParameters*>(params);
+    const double xi = p->point.x;
+    const double yi = p->point.y;
+    const auto t = (s / p->panel->length());
+    const double xj = (1 - t) * p->panel->startPoint().x + t * p->panel->endPoint().x;
+    const double yj = (1 - t) * p->panel->startPoint().y + t * p->panel->endPoint().y;
+    return std::atan2(yi-yj, xi-xj);
+}
+
+//@TODO: encapsulate this
+mglData PsiPlotData(100, 100);
+int draw(mglGraph* gr) {
+    gr->SetRange('x', -0.25, 1.25);
+    gr->SetRange('y', -0.2, 0.2);
+    gr->Cont(PsiPlotData, "", "value 100 color b");
+    gr->Axis();
+    return 0;
 }
 
 int main(int argv, char** argc) {
@@ -132,6 +159,25 @@ int main(int argv, char** argc) {
     for (int index = 0; index < numPoints; ++index) {
       y[index] = -0.2 + index * yStep; 
     }
+    Eigen::Matrix<double, numPoints, numPoints> psi;
+    psi.setZero(numPoints, numPoints);
+    #pragma omp parallel for
+    for (int indexY = 0; indexY < numPoints; ++indexY) {
+        for (int indexX = 0; indexX < numPoints; ++indexX) {
+            psi(indexY, indexX) = y[indexY];
+            for (const auto& panel : test->panels()) {
+                gsl::StackWorkspace<1000> w;
+                gsl_function integrand;
+                integrand.function = streamFunction;
+                StreamFunctionIntegralParameters p = { &panel, Point(x[indexX], y[indexY]) };
+                integrand.params = reinterpret_cast<void*>(&p);
+                double result = 0;
+                double abserr = 0;
+                gsl_integration_qags(&integrand, 0, panel.length(), 1.49e-8, 1.49e-8, 1'000, w.ptr(), &result, &abserr);
+                psi(indexY, indexX) += panel.sigma() / (2.0 * M_PI) * result;
+            }
+        }
+    }
     Eigen::Matrix<double, numPoints, numPoints> u;
     u.setOnes(numPoints, numPoints);
     Eigen::Matrix<double, numPoints, numPoints> v;
@@ -161,6 +207,20 @@ int main(int argv, char** argc) {
     std::ofstream file_v("./out_v.txt");
     assert(file_v.good());
     file_v << v;
+    std::ofstream file_psi("./out_psi.txt");
+    assert(file_psi.good());
+    file_psi << psi;
+    /* ---- */
+    mglData UPlotData(numPoints,numPoints);
+    mglData VPlotData(numPoints,numPoints);
+    for(size_t indexX = 0; indexX < numPoints; ++indexX) {
+        for(size_t indexY = 0; indexY < numPoints; ++indexY) {
+            UPlotData.a[indexX+numPoints*indexY] = u(indexY,indexX);
+            VPlotData.a[indexX+numPoints*indexY] = v(indexY,indexX);
+            PsiPlotData.a[indexX+numPoints*indexY] = psi(indexY,indexX);
+        }
+    }
+    mglGLUT gr(draw, "Streamlines around NACA0012");
     /* ---- */
     return 0;
 }
